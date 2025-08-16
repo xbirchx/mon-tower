@@ -81,6 +81,10 @@ class GameScene extends Phaser.Scene {
         this.lastPlatformCheck = 0; // Throttle platform generation checks
         this.platformCheckInterval = 100; // Check every 100ms instead of every frame
         
+        // Game height limit
+        this.maxGameHeight = 0; // Maximum height (y=0 = height 5000)
+        this.minPlatformY = 0; // Don't create platforms above this y value
+        
         // Initialize particle manager
         this.particleManager = new ParticleManager(this);
         
@@ -98,19 +102,20 @@ class GameScene extends Phaser.Scene {
         this.wallGraphics = this.add.graphics();
         this.wallGraphics.fillStyle(0x34495e); // Dark gray walls
         
-        // Left wall
+        // Create simple tall walls that go to height 5000 (y=0)
+        // Left wall - from ground (y=5000) to top (y=0)
         let leftWall = this.physics.add.staticSprite(25, 2500);
         leftWall.body.setSize(50, 5000);
         leftWall.setVisible(false);
         this.walls.add(leftWall);
         
-        // Right wall  
+        // Right wall - from ground (y=5000) to top (y=0)
         let rightWall = this.physics.add.staticSprite(775, 2500);
         rightWall.body.setSize(50, 5000);
         rightWall.setVisible(false);
         this.walls.add(rightWall);
         
-        // Draw walls visually
+        // Draw walls visually - from y=0 to y=5000
         this.wallGraphics.fillRect(0, 0, 50, 5000); // Left wall
         this.wallGraphics.fillRect(750, 0, 50, 5000); // Right wall
     }
@@ -143,6 +148,11 @@ class GameScene extends Phaser.Scene {
     }
 
     createSinglePlatform() {
+        // Don't create platforms above the height limit
+        if (this.highestPlatformY - this.platformSpacing <= this.minPlatformY) {
+            return null; // Reached height limit
+        }
+        
         this.platformCount++;
         let x = Phaser.Math.Between(100, 700);
         let y = this.highestPlatformY - this.platformSpacing;
@@ -167,13 +177,14 @@ class GameScene extends Phaser.Scene {
     checkAndGeneratePlatforms() {
         let needsRerender = false;
         
-        // Generate new platforms when player gets close to the top
+        // Generate new platforms when player gets close to the top (but respect height limit)
         const playerDistanceFromTop = this.highestPlatformY - this.player.y;
         
-        if (playerDistanceFromTop < 1000) { // When player is within 1000px of highest platform
-            // Generate more platforms
+        if (playerDistanceFromTop < 1000 && this.highestPlatformY > this.minPlatformY) {
+            // Generate more platforms (up to height limit)
             for (let i = 0; i < 10; i++) {
-                this.createSinglePlatform();
+                const newPlatform = this.createSinglePlatform();
+                if (!newPlatform) break; // Hit height limit
             }
             needsRerender = true;
         }
@@ -320,8 +331,8 @@ class GameScene extends Phaser.Scene {
             this.lastPlatformCheck = currentTime;
         }
 
-        // Update score based on height
-        let height = Math.max(0, Math.floor((5000 - this.player.y) / 10));
+        // Update score based on height (capped at 5000)
+        let height = Math.max(0, Math.min(5000, Math.floor((5000 - this.player.y) / 10)));
         if (height > this.score) {
             this.score = height;
             this.scoreText.setText('Height: ' + this.score);
