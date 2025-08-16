@@ -50,11 +50,16 @@ class GameScene extends Phaser.Scene {
         this.cameras.main.startFollow(this.player);
         this.cameras.main.setDeadzone(100, 150);
 
-        // Game variables
-        this.playerSpeed = 160;
-        this.jumpVelocity = -500;
-        this.wallJumpVelocity = -400;
-        this.wallJumpForce = 200;
+        // Game variables (30% faster)
+        this.playerSpeed = 208; // 160 * 1.3
+        this.jumpVelocity = -650; // -500 * 1.3
+        this.wallJumpVelocity = -520; // -400 * 1.3
+        this.wallJumpForce = 260; // 200 * 1.3
+        
+        // Momentum variables (30% faster)
+        this.acceleration = 520; // 400 * 1.3
+        this.deceleration = 780; // 600 * 1.3
+        this.maxSpeed = 390; // 300 * 1.3
         
         // Score display
         this.score = 0;
@@ -129,13 +134,31 @@ class GameScene extends Phaser.Scene {
         this.playerGraphics.x = this.player.x - 15; // Center the graphics
         this.playerGraphics.y = this.player.y - 20;
         
-        // Player movement
+        // Momentum-based player movement
+        let currentVelX = this.player.body.velocity.x;
+        
         if (this.cursors.left.isDown || this.wasd.A.isDown) {
-            this.player.setVelocityX(-this.playerSpeed);
+            // Accelerate left
+            let newVelX = currentVelX - this.acceleration * (1/60); // Assuming 60 FPS
+            newVelX = Math.max(newVelX, -this.maxSpeed); // Clamp to max speed
+            this.player.setVelocityX(newVelX);
         } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
-            this.player.setVelocityX(this.playerSpeed);
+            // Accelerate right
+            let newVelX = currentVelX + this.acceleration * (1/60);
+            newVelX = Math.min(newVelX, this.maxSpeed); // Clamp to max speed
+            this.player.setVelocityX(newVelX);
         } else {
-            this.player.setVelocityX(0);
+            // Decelerate when no input
+            if (Math.abs(currentVelX) > 0) {
+                let decelAmount = this.deceleration * (1/60);
+                if (currentVelX > 0) {
+                    let newVelX = Math.max(0, currentVelX - decelAmount);
+                    this.player.setVelocityX(newVelX);
+                } else {
+                    let newVelX = Math.min(0, currentVelX + decelAmount);
+                    this.player.setVelocityX(newVelX);
+                }
+            }
         }
 
         // Jumping - regular jump from ground
@@ -200,7 +223,7 @@ const config = {
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { y: 800 },
+            gravity: { y: 1040 }, // 800 * 1.3 for 30% faster
             debug: false
         }
     },
