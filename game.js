@@ -5,6 +5,11 @@ class GameScene extends Phaser.Scene {
 
     preload() {
         console.log('Preload started');
+        
+        // Initialize platform renderer and try to load images
+        this.platformRenderer = new PlatformRenderer(this);
+        this.platformRenderer.preloadPlatformImages();
+        
         // We'll create graphics programmatically in the create() method instead
     }
 
@@ -112,11 +117,9 @@ class GameScene extends Phaser.Scene {
         ground.setVisible(false); // Hide physics sprite
         this.platforms.add(ground);
         
-        // Draw ground visual
-        this.platformGraphics.fillStyle(0x8e44ad); // Purple ground
-        this.platformGraphics.fillRect(0, 4900, 800, 100);
+        // Ground visual will be drawn after platforms are created
 
-        // Create some platforms going up
+        // Create some platforms going up with variety
         this.platformData = []; // Store platform positions for drawing
         for (let i = 1; i <= 20; i++) {
             let x = Phaser.Math.Between(100, 700);
@@ -128,15 +131,13 @@ class GameScene extends Phaser.Scene {
             platform.setVisible(false); // Hide physics sprite
             this.platforms.add(platform);
             
-            // Store platform data for drawing
-            this.platformData.push({ x: x - width/2, y: y - 10, width: width, height: 20 });
+            // Create platform data with type assignment
+            const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 20, 5000);
+            this.platformData.push(platformData);
         }
         
-        // Draw all platforms
-        this.platformGraphics.fillStyle(0x3498db); // Blue platforms
-        this.platformData.forEach(platform => {
-            this.platformGraphics.fillRect(platform.x, platform.y, platform.width, platform.height);
-        });
+        // Draw all platforms with variety (including ground)
+        this.platformRenderer.renderPlatforms(this.platformData, this.platformGraphics, true);
     }
 
     update() {
