@@ -61,6 +61,13 @@ class GameScene extends Phaser.Scene {
         this.deceleration = 780; // 600 * 1.3
         this.maxSpeed = 390; // 300 * 1.3
         
+        // Variable jump variables
+        this.minJumpVelocity = -400; // Minimum jump height
+        this.maxJumpVelocity = -650; // Maximum jump height (current jumpVelocity)
+        this.jumpHoldTime = 0; // How long jump is held
+        this.maxJumpHoldTime = 0.3; // Max time to hold for full jump (300ms)
+        this.isJumping = false;
+        
         // Score display
         this.score = 0;
         this.scoreText = this.add.text(16, 16, 'Height: 0', {
@@ -161,9 +168,33 @@ class GameScene extends Phaser.Scene {
             }
         }
 
-        // Jumping - regular jump from ground
-        if ((this.cursors.up.isDown || this.wasd.W.isDown) && this.player.body.touching.down) {
-            this.player.setVelocityY(this.jumpVelocity);
+        // Variable height jumping - regular jump from ground
+        if (this.player.body.touching.down) {
+            if ((this.cursors.up.isDown || this.wasd.W.isDown)) {
+                if (!this.isJumping) {
+                    // Start jump
+                    this.player.setVelocityY(this.minJumpVelocity);
+                    this.isJumping = true;
+                    this.jumpHoldTime = 0;
+                }
+            } else {
+                // Reset when not holding jump
+                this.isJumping = false;
+            }
+        }
+        
+        // Continue boosting jump while holding and still going up
+        if (this.isJumping && (this.cursors.up.isDown || this.wasd.W.isDown) && this.player.body.velocity.y < 0) {
+            this.jumpHoldTime += 1/60;
+            if (this.jumpHoldTime <= this.maxJumpHoldTime) {
+                // Add upward force while holding
+                this.player.setVelocityY(this.player.body.velocity.y - 15); // Boost jump
+            }
+        }
+        
+        // Stop jump boost when released or falling
+        if (!this.cursors.up.isDown && !this.wasd.W.isDown) {
+            this.isJumping = false;
         }
         
         // Wall jumping - jump off walls
