@@ -68,6 +68,9 @@ class GameScene extends Phaser.Scene {
         this.maxJumpHoldTime = 0.3; // Max time to hold for full jump (300ms)
         this.isJumping = false;
         
+        // Initialize particle manager
+        this.particleManager = new ParticleManager(this);
+        
         // Score display
         this.score = 0;
         this.scoreText = this.add.text(16, 16, 'Height: 0', {
@@ -176,6 +179,8 @@ class GameScene extends Phaser.Scene {
                     this.player.setVelocityY(this.minJumpVelocity);
                     this.isJumping = true;
                     this.jumpHoldTime = 0;
+                    // Emit jump dust particles
+                    this.particleManager.emitJumpDust(this.player.x, this.player.y);
                 }
             } else {
                 // Reset when not holding jump
@@ -203,11 +208,15 @@ class GameScene extends Phaser.Scene {
             if (this.player.body.touching.left) {
                 this.player.setVelocityY(this.wallJumpVelocity);
                 this.player.setVelocityX(this.wallJumpForce); // Push away from wall
+                // Emit wall slide particles
+                this.particleManager.emitWallSlide(this.player.x - 15, this.player.y);
             }
             // Check if touching right wall
             else if (this.player.body.touching.right) {
                 this.player.setVelocityY(this.wallJumpVelocity);
                 this.player.setVelocityX(-this.wallJumpForce); // Push away from wall
+                // Emit wall slide particles
+                this.particleManager.emitWallSlide(this.player.x + 15, this.player.y);
             }
         }
 
