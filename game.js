@@ -30,12 +30,17 @@ class GameScene extends Phaser.Scene {
 
         // Create platforms group
         this.platforms = this.physics.add.staticGroup();
+        
+        // Create walls group
+        this.walls = this.physics.add.staticGroup();
 
-        // Create initial platforms
+        // Create walls and initial platforms
+        this.createWalls();
         this.createInitialPlatforms();
 
         // Player physics
         this.physics.add.collider(this.player, this.platforms);
+        this.physics.add.collider(this.player, this.walls);
 
         // Controls
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -48,6 +53,8 @@ class GameScene extends Phaser.Scene {
         // Game variables
         this.playerSpeed = 160;
         this.jumpVelocity = -500;
+        this.wallJumpVelocity = -400;
+        this.wallJumpForce = 200;
         
         // Score display
         this.score = 0;
@@ -56,6 +63,28 @@ class GameScene extends Phaser.Scene {
             fill: '#ffffff'
         });
         this.scoreText.setScrollFactor(0); // Keep score fixed on screen
+    }
+
+    createWalls() {
+        // Create wall graphics
+        this.wallGraphics = this.add.graphics();
+        this.wallGraphics.fillStyle(0x34495e); // Dark gray walls
+        
+        // Left wall
+        let leftWall = this.physics.add.staticSprite(25, 2500);
+        leftWall.body.setSize(50, 5000);
+        leftWall.setVisible(false);
+        this.walls.add(leftWall);
+        
+        // Right wall  
+        let rightWall = this.physics.add.staticSprite(775, 2500);
+        rightWall.body.setSize(50, 5000);
+        rightWall.setVisible(false);
+        this.walls.add(rightWall);
+        
+        // Draw walls visually
+        this.wallGraphics.fillRect(0, 0, 50, 5000); // Left wall
+        this.wallGraphics.fillRect(750, 0, 50, 5000); // Right wall
     }
 
     createInitialPlatforms() {
@@ -109,9 +138,23 @@ class GameScene extends Phaser.Scene {
             this.player.setVelocityX(0);
         }
 
-        // Jumping
+        // Jumping - regular jump from ground
         if ((this.cursors.up.isDown || this.wasd.W.isDown) && this.player.body.touching.down) {
             this.player.setVelocityY(this.jumpVelocity);
+        }
+        
+        // Wall jumping - jump off walls
+        if ((this.cursors.up.isDown || this.wasd.W.isDown) && !this.player.body.touching.down) {
+            // Check if touching left wall
+            if (this.player.body.touching.left) {
+                this.player.setVelocityY(this.wallJumpVelocity);
+                this.player.setVelocityX(this.wallJumpForce); // Push away from wall
+            }
+            // Check if touching right wall
+            else if (this.player.body.touching.right) {
+                this.player.setVelocityY(this.wallJumpVelocity);
+                this.player.setVelocityX(-this.wallJumpForce); // Push away from wall
+            }
         }
 
         // Update score based on height
