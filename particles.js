@@ -20,8 +20,6 @@ class ParticleManager {
         dustGraphics.generateTexture('dustParticle', 8, 8);
         dustGraphics.destroy();
 
-        console.log('Creating jump dust emitter');
-        
         // Create jump dust emitter using new API
         this.particles.jumpDust = this.scene.add.particles(0, 0, 'dustParticle', {
             speed: { min: 50, max: 120 },
@@ -32,8 +30,6 @@ class ParticleManager {
             angle: { min: 200, max: 340 }, // Wider spread
             emitting: false
         });
-        
-        console.log('Jump dust emitter created:', this.particles.jumpDust);
     }
 
     createLandingEmitter() {
@@ -76,7 +72,6 @@ class ParticleManager {
 
     // Emit jump dust when player jumps
     emitJumpDust(x, y) {
-        console.log('Emitting jump dust at:', x, y + 20);
         this.particles.jumpDust.setPosition(x, y + 20);
         this.particles.jumpDust.explode(4);
     }
@@ -89,7 +84,6 @@ class ParticleManager {
 
     // Emit wall slide sparks
     emitWallSlide(x, y) {
-        console.log('Emitting wall slide sparks at:', x, y);
         this.particles.wallSlide.setPosition(x, y);
         this.particles.wallSlide.explode(6);
     }

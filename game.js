@@ -16,8 +16,8 @@ class GameScene extends Phaser.Scene {
     create() {
         console.log('Create started');
         
-        // Game world bounds - make it tall for tower climbing
-        this.physics.world.setBounds(0, 0, 800, 5000);
+        // Game world bounds - make it tall for tower climbing to height 5000
+        this.physics.world.setBounds(0, -45000, 800, 50000); // y=-45000 to y=5000 (50000 total height)
 
         // Create player visual using graphics
         this.playerGraphics = this.add.graphics();
@@ -28,7 +28,7 @@ class GameScene extends Phaser.Scene {
         this.player = this.physics.add.sprite(400, 4800);
         this.player.body.setSize(30, 40);
         this.player.setBounce(0.2);
-        this.player.setCollideWorldBounds(true);
+        this.player.setCollideWorldBounds(false); // Don't constrain to world bounds - let player climb higher!
         
         // Make the physics sprite invisible since we're using graphics
         this.player.setVisible(false);
@@ -81,9 +81,9 @@ class GameScene extends Phaser.Scene {
         this.lastPlatformCheck = 0; // Throttle platform generation checks
         this.platformCheckInterval = 100; // Check every 100ms instead of every frame
         
-        // Game height limit
-        this.maxGameHeight = 0; // Maximum height (y=0 = height 5000)
-        this.minPlatformY = 0; // Don't create platforms above this y value
+        // Game height limit  
+        this.maxGameHeight = -45000; // Maximum height (y=-45000 = height 5000)
+        this.minPlatformY = -45000; // Don't create platforms above this y value
         
         // Initialize particle manager
         this.particleManager = new ParticleManager(this);
@@ -102,22 +102,22 @@ class GameScene extends Phaser.Scene {
         this.wallGraphics = this.add.graphics();
         this.wallGraphics.fillStyle(0x34495e); // Dark gray walls
         
-        // Create simple tall walls that go to height 5000 (y=0)
-        // Left wall - from ground (y=5000) to top (y=0)
-        let leftWall = this.physics.add.staticSprite(25, 2500);
-        leftWall.body.setSize(50, 5000);
+        // Create simple tall walls that go to height 5000 (y=-45000)
+        // Left wall - from ground (y=5000) to top (y=-45000)
+        let leftWall = this.physics.add.staticSprite(25, -20000);
+        leftWall.body.setSize(50, 50000);
         leftWall.setVisible(false);
         this.walls.add(leftWall);
         
-        // Right wall - from ground (y=5000) to top (y=0)
-        let rightWall = this.physics.add.staticSprite(775, 2500);
-        rightWall.body.setSize(50, 5000);
+        // Right wall - from ground (y=5000) to top (y=-45000)
+        let rightWall = this.physics.add.staticSprite(775, -20000);
+        rightWall.body.setSize(50, 50000);
         rightWall.setVisible(false);
         this.walls.add(rightWall);
         
-        // Draw walls visually - from y=0 to y=5000
-        this.wallGraphics.fillRect(0, 0, 50, 5000); // Left wall
-        this.wallGraphics.fillRect(750, 0, 50, 5000); // Right wall
+        // Draw walls visually - from y=-45000 to y=5000
+        this.wallGraphics.fillRect(0, -45000, 50, 50000); // Left wall
+        this.wallGraphics.fillRect(750, -45000, 50, 50000); // Right wall
     }
 
     createInitialPlatforms() {
@@ -141,10 +141,15 @@ class GameScene extends Phaser.Scene {
     }
 
     generateInitialPlatforms() {
-        // Create initial set of platforms
-        for (let i = 1; i <= 50; i++) { // More initial platforms
-            this.createSinglePlatform();
+        // Create continuous platforms from ground level up to height limit
+        // Start from slightly above ground and go all the way up
+        this.highestPlatformY = 4800; // Start closer to ground
+        
+        while (this.highestPlatformY - this.platformSpacing > this.minPlatformY) {
+            const result = this.createSinglePlatform();
+            if (!result) break; // Stop if we hit height limit
         }
+
     }
 
     createSinglePlatform() {
@@ -165,7 +170,7 @@ class GameScene extends Phaser.Scene {
         this.platforms.add(platform);
         
         // Create visual platform data
-        const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 20, 5000);
+        const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 20, 50000);
         this.platformData.push(platformData);
         
         // Update highest platform position
@@ -235,10 +240,7 @@ class GameScene extends Phaser.Scene {
             sprite.destroy();
         });
         
-        // Log cleanup for debugging
-        if (platformsToRemove.length > 0) {
-            console.log(`Cleaned up ${platformsToRemove.length} old platforms. Total platforms: ${this.platformData.length}`);
-        }
+
         
         return platformsToRemove.length;
     }
@@ -331,12 +333,17 @@ class GameScene extends Phaser.Scene {
             this.lastPlatformCheck = currentTime;
         }
 
-        // Update score based on height (capped at 5000)
-        let height = Math.max(0, Math.min(5000, Math.floor((5000 - this.player.y) / 10)));
+        // Update score based on height (no cap - let it go to full height)
+        // Ground is at y=5000, max height should be at y=-45000
+        let calculatedHeight = Math.floor((5000 - this.player.y) / 10);
+        let height = Math.max(0, calculatedHeight); // Remove the 5000 cap!
+        
         if (height > this.score) {
             this.score = height;
             this.scoreText.setText('Height: ' + this.score);
         }
+        
+
 
         // Game over if player falls too far
         if (this.player.y > 5100) {
@@ -368,7 +375,7 @@ class GameScene extends Phaser.Scene {
 const config = {
     type: Phaser.AUTO,
     width: 800,
-    height: 600,
+    height: window.innerHeight, // Use full screen height
     parent: 'game-container',
     backgroundColor: '#87CEEB', // Sky blue background
     physics: {

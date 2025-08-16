@@ -28,9 +28,8 @@ class PlatformRenderer {
             const imagePath = `platforms/${imageName}`;
             try {
                 this.scene.load.image(key, imagePath);
-                console.log(`Loading platform image: ${imagePath}`);
             } catch (error) {
-                console.log(`Platform image ${imagePath} not found, will use color fallback`);
+                // Platform image not found, will use color fallback
             }
         });
     }
