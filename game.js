@@ -73,6 +73,14 @@ class GameScene extends Phaser.Scene {
         this.maxJumpHoldTime = 0.3; // Max time to hold for full jump (300ms)
         this.isJumping = false;
         
+        // Platform generation variables
+        this.highestPlatformY = 4900; // Track highest platform created
+        this.platformSpacing = 120; // Spacing between platforms
+        this.platformCount = 0; // Count of platforms created
+        this.platformCleanupDistance = 2000; // Remove platforms this far below player
+        this.lastPlatformCheck = 0; // Throttle platform generation checks
+        this.platformCheckInterval = 100; // Check every 100ms instead of every frame
+        
         // Initialize particle manager
         this.particleManager = new ParticleManager(this);
         
@@ -119,25 +127,109 @@ class GameScene extends Phaser.Scene {
         
         // Ground visual will be drawn after platforms are created
 
-        // Create some platforms going up with variety
+        // Create initial platforms going up with variety
         this.platformData = []; // Store platform positions for drawing
-        for (let i = 1; i <= 20; i++) {
-            let x = Phaser.Math.Between(100, 700);
-            let y = 4900 - (i * 120); // Reduced spacing from 200 to 120
-            let width = Phaser.Math.Between(100, 200);
-            
-            let platform = this.physics.add.staticSprite(x, y);
-            platform.body.setSize(width, 20);
-            platform.setVisible(false); // Hide physics sprite
-            this.platforms.add(platform);
-            
-            // Create platform data with type assignment
-            const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 20, 5000);
-            this.platformData.push(platformData);
-        }
+        this.generateInitialPlatforms();
         
         // Draw all platforms with variety (including ground)
         this.platformRenderer.renderPlatforms(this.platformData, this.platformGraphics, true);
+    }
+
+    generateInitialPlatforms() {
+        // Create initial set of platforms
+        for (let i = 1; i <= 50; i++) { // More initial platforms
+            this.createSinglePlatform();
+        }
+    }
+
+    createSinglePlatform() {
+        this.platformCount++;
+        let x = Phaser.Math.Between(100, 700);
+        let y = this.highestPlatformY - this.platformSpacing;
+        let width = Phaser.Math.Between(100, 200);
+        
+        // Create physics platform
+        let platform = this.physics.add.staticSprite(x, y);
+        platform.body.setSize(width, 20);
+        platform.setVisible(false);
+        this.platforms.add(platform);
+        
+        // Create visual platform data
+        const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 20, 5000);
+        this.platformData.push(platformData);
+        
+        // Update highest platform position
+        this.highestPlatformY = y;
+        
+        return platformData;
+    }
+
+    checkAndGeneratePlatforms() {
+        let needsRerender = false;
+        
+        // Generate new platforms when player gets close to the top
+        const playerDistanceFromTop = this.highestPlatformY - this.player.y;
+        
+        if (playerDistanceFromTop < 1000) { // When player is within 1000px of highest platform
+            // Generate more platforms
+            for (let i = 0; i < 10; i++) {
+                this.createSinglePlatform();
+            }
+            needsRerender = true;
+        }
+        
+        // Clean up old platforms to prevent lag
+        const cleanedUp = this.cleanupOldPlatforms();
+        if (cleanedUp > 0) {
+            needsRerender = true;
+        }
+        
+        // Only re-render if we actually changed something
+        if (needsRerender) {
+            this.platformRenderer.renderPlatforms(this.platformData, this.platformGraphics, true);
+        }
+    }
+
+    cleanupOldPlatforms() {
+        const playerY = this.player.y;
+        const cleanupThreshold = playerY + this.platformCleanupDistance;
+        
+        // Find platforms that are too far below the player
+        const platformsToRemove = [];
+        const physicsSpritesToRemove = [];
+        
+        for (let i = this.platformData.length - 1; i >= 0; i--) {
+            const platform = this.platformData[i];
+            if (platform.y > cleanupThreshold) {
+                // Mark for removal
+                platformsToRemove.push(i);
+                
+                // Find corresponding physics sprite to remove
+                this.platforms.children.entries.forEach((physicsSprite, index) => {
+                    if (Math.abs(physicsSprite.y - (platform.y + platform.height/2)) < 5) {
+                        physicsSpritesToRemove.push(physicsSprite);
+                    }
+                });
+            }
+        }
+        
+        // Remove platforms from data array
+        platformsToRemove.forEach(index => {
+            this.platformData.splice(index, 1);
+        });
+        
+        // Remove physics sprites
+        physicsSpritesToRemove.forEach(sprite => {
+            this.platforms.remove(sprite);
+            sprite.destroy();
+        });
+        
+        // Log cleanup for debugging
+        if (platformsToRemove.length > 0) {
+            console.log(`Cleaned up ${platformsToRemove.length} old platforms. Total platforms: ${this.platformData.length}`);
+        }
+        
+        return platformsToRemove.length;
     }
 
     update() {
@@ -219,6 +311,13 @@ class GameScene extends Phaser.Scene {
                 // Emit wall slide particles
                 this.particleManager.emitWallSlide(this.player.x + 15, this.player.y);
             }
+        }
+
+        // Check if we need to generate more platforms (throttled)
+        const currentTime = this.time.now;
+        if (currentTime - this.lastPlatformCheck > this.platformCheckInterval) {
+            this.checkAndGeneratePlatforms();
+            this.lastPlatformCheck = currentTime;
         }
 
         // Update score based on height
