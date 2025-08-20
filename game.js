@@ -10,6 +10,14 @@ class GameScene extends Phaser.Scene {
         this.platformRenderer = new PlatformRenderer(this);
         this.platformRenderer.preloadPlatformImages();
         
+        // Initialize background renderer and try to load images
+        this.backgroundRenderer = new BackgroundRenderer(this);
+        this.backgroundRenderer.preloadBackgroundImages();
+        
+        // Initialize wall renderer and try to load images
+        this.wallRenderer = new WallRenderer(this);
+        this.wallRenderer.preloadWallImages();
+        
         // Load player sprite (fallback to graphics if not found)
         try {
             this.load.image('player', 'player.png');
@@ -116,6 +124,9 @@ class GameScene extends Phaser.Scene {
         // Initialize particle manager
         this.particleManager = new ParticleManager(this);
         
+        // Initialize background system
+        this.backgroundRenderer.initialize();
+        
         // Score display
         this.score = 0;
         this.scoreText = this.add.text(16, 16, 'Height: 0', {
@@ -126,13 +137,9 @@ class GameScene extends Phaser.Scene {
     }
 
     createWalls() {
-        // Create wall graphics
-        this.wallGraphics = this.add.graphics();
-        this.wallGraphics.fillStyle(0x34495e); // Dark gray walls
-        
-        // Create simple tall walls that go to height 5000 (y=-45000)
-        // Left wall - from ground (y=5000) to top (y=-45000)
-        let leftWall = this.physics.add.staticSprite(25, -20000);
+        // Create physics bodies for walls (invisible collision boxes)
+        // Left wall - positioned to align with visual wall (right edge at x=0)
+        let leftWall = this.physics.add.staticSprite(-25, -20000);
         leftWall.body.setSize(50, 50000);
         leftWall.setVisible(false);
         this.walls.add(leftWall);
@@ -143,9 +150,8 @@ class GameScene extends Phaser.Scene {
         rightWall.setVisible(false);
         this.walls.add(rightWall);
         
-        // Draw walls visually - from y=-45000 to y=5000
-        this.wallGraphics.fillRect(0, -45000, 50, 50000); // Left wall
-        this.wallGraphics.fillRect(750, -45000, 50, 50000); // Right wall
+        // Render visual walls with stone pattern
+        this.wallRenderer.renderWalls();
     }
 
     createInitialPlatforms() {
@@ -383,6 +389,12 @@ class GameScene extends Phaser.Scene {
             this.score = height;
             this.scoreText.setText('Height: ' + this.score);
         }
+        
+        // Update background based on current height
+        this.backgroundRenderer.updateBackground(height);
+        
+        // Update wall visibility for performance (cull off-screen walls)
+        this.wallRenderer.updateWallVisibility(this.player.y);
         
 
 
