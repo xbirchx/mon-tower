@@ -165,12 +165,12 @@ class GameScene extends Phaser.Scene {
         
         // Create physics platform
         let platform = this.physics.add.staticSprite(x, y);
-        platform.body.setSize(width, 20);
+        platform.body.setSize(width, 28);
         platform.setVisible(false);
         this.platforms.add(platform);
         
         // Create visual platform data
-        const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 20, 50000);
+        const platformData = this.platformRenderer.createPlatformWithType(x, y, width, 28, 50000);
         this.platformData.push(platformData);
         
         // Update highest platform position
