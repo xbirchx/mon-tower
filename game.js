@@ -109,6 +109,11 @@ class GameScene extends Phaser.Scene {
         // Sprite direction tracking
         this.facingDirection = 1; // 1 = right, -1 = left
         
+        // Falling duration tracking
+        this.fallStartTime = 0;
+        this.isFalling = false;
+        this.fallDurationThreshold = 500; // 0.5 seconds in milliseconds
+        
         // Platform generation variables
         this.highestPlatformY = 4900; // Track highest platform created
         this.platformSpacing = 120; // Spacing between platforms
@@ -291,6 +296,25 @@ class GameScene extends Phaser.Scene {
             this.playerSprite.y = this.player.y + 25; // Move sprite down a bit more to eliminate gap
             // Apply sprite direction (flip horizontally)
             this.playerSprite.setFlipX(this.facingDirection === -1);
+            // Apply vertical flip when falling for more than 2 seconds
+            this.playerSprite.setFlipY(this.isFalling);
+        }
+        
+        // Track falling duration for sprite flipping
+        const fallCheckTime = this.time.now;
+        if (this.player.body.velocity.y > 0 && !this.player.body.touching.down) {
+            // Player is falling
+            if (this.fallStartTime === 0) {
+                // Start tracking fall time
+                this.fallStartTime = fallCheckTime;
+            } else if (fallCheckTime - this.fallStartTime > this.fallDurationThreshold) {
+                // Been falling for more than 2 seconds
+                this.isFalling = true;
+            }
+        } else {
+            // Player is not falling (on ground, jumping up, etc.)
+            this.fallStartTime = 0;
+            this.isFalling = false;
         }
         
         // Momentum-based player movement
