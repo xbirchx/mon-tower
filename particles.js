@@ -10,6 +10,7 @@ class ParticleManager {
         this.createJumpDustEmitter();
         this.createLandingEmitter();
         this.createWallSlideEmitter();
+        this.createAirTrailEmitter();
     }
 
     createJumpDustEmitter() {
@@ -52,9 +53,9 @@ class ParticleManager {
     }
 
     createWallSlideEmitter() {
-        // Create wall slide spark particles - make them more visible
+        // Create wall slide spark particles - rainbow colored
         const sparkGraphics = this.scene.add.graphics();
-        sparkGraphics.fillStyle(0xff0000); // Bright red for visibility
+        sparkGraphics.fillStyle(0xffffff); // White base for tinting
         sparkGraphics.fillRect(0, 0, 6, 6); // Bigger
         sparkGraphics.generateTexture('sparkParticle', 6, 6);
         sparkGraphics.destroy();
@@ -66,8 +67,35 @@ class ParticleManager {
             lifespan: 600,
             quantity: 6,
             angle: { min: 0, max: 360 },
+            tint: [0xff0000, 0xff8000, 0xffff00, 0x80ff00, 0x00ff00, 0x00ff80, 0x00ffff, 0x0080ff, 0x0000ff, 0x8000ff, 0xff00ff, 0xff0080], // Rainbow colors
             emitting: false
         });
+    }
+
+    createAirTrailEmitter() {
+        // Create air trail particles - rainbow colored like wall slide
+        const trailGraphics = this.scene.add.graphics();
+        trailGraphics.fillStyle(0xffffff); // White base for tinting
+        trailGraphics.fillRect(0, 0, 8, 8); // Bigger particles for trail line
+        trailGraphics.generateTexture('trailParticle', 8, 8);
+        trailGraphics.destroy();
+
+        this.particles.airTrail = this.scene.add.particles(0, 0, 'trailParticle', {
+            speed: { min: 5, max: 15 }, // Much slower speed so particles stay in line
+            scale: { start: 1.5, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: 1500, // Much longer lifespan for longer trail
+            quantity: 1, // Just one particle per emission for clean line
+            angle: { min: 0, max: 360 }, // Random spread but low speed keeps them close
+            tint: [0xff0000, 0xff8000, 0xffff00, 0x80ff00, 0x00ff00, 0x00ff80, 0x00ffff, 0x0080ff, 0x0000ff, 0x8000ff, 0xff00ff, 0xff0080], // Rainbow colors
+            emitting: false
+        });
+        
+        // Track air trail state and position history
+        this.airTrailActive = false;
+        this.lastAirTrailTime = 0;
+        this.playerPositionHistory = []; // Store recent player positions
+        this.maxHistoryLength = 30; // Keep last 30 positions for longer trail
     }
 
     // Emit jump dust when player jumps
@@ -86,6 +114,40 @@ class ParticleManager {
     emitWallSlide(x, y) {
         this.particles.wallSlide.setPosition(x, y);
         this.particles.wallSlide.explode(6);
+    }
+
+    // Emit air trail particles when player is in air
+    updateAirTrail(x, y, isInAir, facingDirection, currentTime) {
+        if (isInAir) {
+            // Update position history
+            this.playerPositionHistory.push({ x: x, y: y, time: currentTime });
+            
+            // Keep only recent positions
+            if (this.playerPositionHistory.length > this.maxHistoryLength) {
+                this.playerPositionHistory.shift();
+            }
+            
+            // Emit particles along the trail path (every 30ms for smoother trail)
+            if (currentTime - this.lastAirTrailTime > 30) {
+                // Emit particles at positions along the player's recent path
+                for (let i = 0; i < this.playerPositionHistory.length; i += 3) { // Every 3rd position
+                    const pos = this.playerPositionHistory[i];
+                    const timeDiff = currentTime - pos.time;
+                    
+                    // Only emit at positions that are 100-800ms old (creating longer distance from player)
+                    if (timeDiff > 100 && timeDiff < 800) {
+                        this.particles.airTrail.setPosition(pos.x, pos.y);
+                        this.particles.airTrail.explode(1);
+                    }
+                }
+                this.lastAirTrailTime = currentTime;
+            }
+            this.airTrailActive = true;
+        } else {
+            // Clear position history when landing
+            this.playerPositionHistory = [];
+            this.airTrailActive = false;
+        }
     }
 
     // Clean up particles when scene ends

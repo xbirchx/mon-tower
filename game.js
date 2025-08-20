@@ -404,6 +404,10 @@ class GameScene extends Phaser.Scene {
             this.lastPlatformCheck = currentTime;
         }
 
+        // Update air trail effect - show rainbow trail when player is in the air
+        const isInAir = !this.player.body.touching.down;
+        this.particleManager.updateAirTrail(this.player.x, this.player.y, isInAir, this.facingDirection, this.time.now);
+
         // Update score based on height (no cap - let it go to full height)
         // Ground is at y=5000, max height should be at y=-45000
         let calculatedHeight = Math.floor((5000 - this.player.y) / 10);
