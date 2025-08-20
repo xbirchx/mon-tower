@@ -4,6 +4,7 @@ class PlatformRenderer {
         this.platformTextures = {};
         this.platformSprites = []; // Track created sprites for cleanup
         this.spritePool = {}; // Pool of reusable sprites by type
+        this.groundTexture = null; // Static ground texture
         this.platformColors = {
             platform1: 0x3498db, // Blue - lowest heights
             platform2: 0x2ecc71, // Green 
@@ -65,8 +66,7 @@ class PlatformRenderer {
         
         // Draw ground first if requested
         if (includeGround) {
-            graphics.fillStyle(0x8e44ad); // Purple ground
-            graphics.fillRect(0, 4900, 800, 100);
+            this.drawDirtGround(graphics);
         }
         
         // Group platforms by type for efficient rendering
@@ -83,6 +83,75 @@ class PlatformRenderer {
         Object.keys(platformsByType).forEach(type => {
             this.renderPlatformType(type, platformsByType[type], graphics);
         });
+    }
+
+    // Draw brown ground with static dirt texture
+    drawDirtGround(graphics) {
+        // Create static ground texture if it doesn't exist
+        if (!this.groundTexture) {
+            this.createStaticGroundTexture();
+        }
+        
+        // Draw the static ground texture
+        if (this.groundTexture) {
+            graphics.fillStyle(0x8B4513); // Saddle brown base
+            graphics.fillRect(0, 4900, 800, 100);
+            
+            // Draw the static dirt pattern
+            this.groundTexture.forEach(spot => {
+                graphics.fillStyle(spot.color);
+                if (spot.type === 'circle') {
+                    graphics.fillCircle(spot.x, spot.y, spot.size);
+                } else {
+                    graphics.fillRect(spot.x, spot.y, spot.width, spot.height);
+                }
+            });
+        }
+    }
+    
+    // Create static ground texture pattern (only called once)
+    createStaticGroundTexture() {
+        this.groundTexture = [];
+        
+        // Use a fixed seed for consistent pattern
+        const seed = 12345;
+        let random = this.seededRandom(seed);
+        
+        // Create dirt spots with seeded random
+        for (let i = 0; i < 60; i++) {
+            this.groundTexture.push({
+                type: 'circle',
+                x: random() * 800,
+                y: 4900 + random() * 100,
+                size: 2 + random() * 4,
+                color: 0x654321 // Darker brown for dirt spots
+            });
+        }
+        
+        // Add larger dirt clumps
+        for (let i = 0; i < 20; i++) {
+            this.groundTexture.push({
+                type: 'rect',
+                x: random() * 800,
+                y: 4900 + random() * 100,
+                width: 3 + random() * 6,
+                height: 2 + random() * 4,
+                color: 0x5D4037 // Even darker brown
+            });
+        }
+    }
+    
+    // Simple seeded random number generator for consistent results
+    seededRandom(seed) {
+        let m = 0x80000000; // 2**31
+        let a = 1103515245;
+        let c = 12345;
+        let state = seed;
+        
+        return function() {
+            state = (a * state + c) % m;
+            return state / (m - 1);
+        };
     }
 
     // Render platforms of a specific type

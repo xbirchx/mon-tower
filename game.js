@@ -42,7 +42,7 @@ class GameScene extends Phaser.Scene {
             
             // Create separate visual sprite that we can position independently
             this.playerSprite = this.add.sprite(400, 4800, 'player');
-            this.playerSprite.setDisplaySize(76, 84); // 10% wider again (69*1.1, height stays 84)
+            this.playerSprite.setDisplaySize(91, 84); // 20% wider than 76 (76*1.2, height stays 84)
             this.playerSprite.setOrigin(0.5, 1); // Bottom-center origin
             this.playerSprite.setDepth(1000); // Make sure sprite appears on top of everything
             
