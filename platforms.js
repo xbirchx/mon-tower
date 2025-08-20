@@ -178,6 +178,8 @@ class PlatformRenderer {
             });
         }
     }
+    
+
 
     // Create platform with type assignment
     createPlatformWithType(x, y, width, height, worldHeight = 5000) {

@@ -42,7 +42,7 @@ class GameScene extends Phaser.Scene {
             
             // Create separate visual sprite that we can position independently
             this.playerSprite = this.add.sprite(400, 4800, 'player');
-            this.playerSprite.setDisplaySize(91, 84); // 20% wider than 76 (76*1.2, height stays 84)
+            this.playerSprite.setDisplaySize(78, 62); // 20% bigger (65*1.2, 52*1.2)
             this.playerSprite.setOrigin(0.5, 1); // Bottom-center origin
             this.playerSprite.setDepth(1000); // Make sure sprite appears on top of everything
             
@@ -94,10 +94,11 @@ class GameScene extends Phaser.Scene {
         this.wallJumpVelocity = -520; // -400 * 1.3
         this.wallJumpForce = 260; // 200 * 1.3
         
-        // Momentum variables (30% faster)
-        this.acceleration = 520; // 400 * 1.3
+        // Momentum variables (enhanced for Icy Tower feel)
+        this.acceleration = 650; // Increased acceleration
         this.deceleration = 780; // 600 * 1.3
-        this.maxSpeed = 390; // 300 * 1.3
+        this.maxSpeed = 600; // Increased max speed
+        this.superMaxSpeed = 900; // Ultra-high speed achievable with combos
         
         // Variable jump variables
         this.minJumpVelocity = -400; // Minimum jump height
@@ -109,6 +110,25 @@ class GameScene extends Phaser.Scene {
         // Sprite direction tracking
         this.facingDirection = 1; // 1 = right, -1 = left
         
+        // Combo system
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.comboMultiplier = 1;
+        this.lastPlatformTouched = null;
+        this.comboResetTimer = 0;
+        this.comboResetDelay = 1000; // Reset combo after 1 second without platform touch
+        
+        // Speed and momentum tracking
+        this.currentSpeed = 0;
+        this.speedBoostActive = false;
+        this.speedBoostTimer = 0;
+        
+        // Wall sliding
+        this.wallSlideSpeed = 150;
+        this.isWallSliding = false;
+        this.wallSlideTimer = 0;
+        this.maxWallSlideTime = 800; // Max wall slide time in ms
+        
         // Falling duration tracking
         this.fallStartTime = 0;
         this.isFalling = false;
@@ -116,11 +136,17 @@ class GameScene extends Phaser.Scene {
         
         // Platform generation variables
         this.highestPlatformY = 4900; // Track highest platform created
-        this.platformSpacing = 120; // Spacing between platforms
+        this.basePlatformSpacing = 120; // Base spacing between platforms
+        this.platformSpacing = 120; // Current spacing (increases with height)
         this.platformCount = 0; // Count of platforms created
         this.platformCleanupDistance = 2000; // Remove platforms this far below player
         this.lastPlatformCheck = 0; // Throttle platform generation checks
         this.platformCheckInterval = 100; // Check every 100ms instead of every frame
+        
+        // Danger zone (rising lava/water)
+        this.dangerZoneY = 5200; // Start below ground
+        this.dangerZoneSpeed = 0.5; // How fast it rises
+        this.dangerZoneActive = false;
         
         // Game height limit  
         this.maxGameHeight = -45000; // Maximum height (y=-45000 = height 5000)
@@ -132,6 +158,10 @@ class GameScene extends Phaser.Scene {
         // Initialize background system
         this.backgroundRenderer.initialize();
         
+        // Create danger zone visual
+        this.dangerZoneGraphics = this.add.graphics();
+        this.dangerZoneGraphics.setDepth(100); // Above platforms but below UI
+        
         // Score display
         this.score = 0;
         this.scoreText = this.add.text(16, 16, 'Height: 0', {
@@ -139,6 +169,30 @@ class GameScene extends Phaser.Scene {
             fill: '#ffffff'
         });
         this.scoreText.setScrollFactor(0); // Keep score fixed on screen
+        
+        // Combo display
+        this.comboText = this.add.text(16, 50, '', {
+            fontSize: '20px',
+            fill: '#ffff00'
+        });
+        this.comboText.setScrollFactor(0);
+        
+        // Speed display
+        this.speedText = this.add.text(16, 80, '', {
+            fontSize: '18px',
+            fill: '#00ff00'
+        });
+        this.speedText.setScrollFactor(0);
+        
+        // Combo celebration text (hidden initially)
+        this.comboPopupText = this.add.text(400, 300, '', {
+            fontSize: '32px',
+            fill: '#ff6b6b',
+            fontStyle: 'bold'
+        });
+        this.comboPopupText.setOrigin(0.5);
+        this.comboPopupText.setScrollFactor(0);
+        this.comboPopupText.setVisible(false);
     }
 
     createWalls() {
@@ -198,6 +252,11 @@ class GameScene extends Phaser.Scene {
         }
         
         this.platformCount++;
+        
+        // Gradually increase platform spacing with height for Icy Tower feel
+        const currentHeight = Math.max(0, Math.floor((5000 - this.highestPlatformY) / 10));
+        this.platformSpacing = this.basePlatformSpacing + Math.floor(currentHeight / 500) * 20; // Increase spacing every 500 height units
+        
         let x = Phaser.Math.Between(100, 700);
         let y = this.highestPlatformY - this.platformSpacing;
         let width = Phaser.Math.Between(100, 200);
@@ -285,19 +344,53 @@ class GameScene extends Phaser.Scene {
     }
 
     update() {
-        // Sync player visuals with physics body
+        // Enhanced player visual sync with animations
         if (this.playerGraphics) {
             // Graphics fallback
-            this.playerGraphics.x = this.player.x - 15; // Center the graphics
+            this.playerGraphics.x = this.player.x - 15;
             this.playerGraphics.y = this.player.y - 20;
         } else if (this.playerSprite) {
-            // Sprite version - sync sprite position with physics body
+            // Sprite version with enhanced animations
             this.playerSprite.x = this.player.x;
-            this.playerSprite.y = this.player.y + 25; // Move sprite down a bit more to eliminate gap
+            this.playerSprite.y = this.player.y + 25;
+            
+            // Character tilting based on movement speed and direction
+            const speedRatio = Math.abs(this.player.body.velocity.x) / this.maxSpeed;
+            const tiltAngle = speedRatio * 15 * this.facingDirection; // Up to 15 degrees tilt
+            
+            // Additional tilt when jumping/falling
+            const verticalVel = this.player.body.velocity.y;
+            let verticalTilt = 0;
+            if (verticalVel < -200) {
+                // Jumping - lean back slightly
+                verticalTilt = -5;
+            } else if (verticalVel > 200) {
+                // Falling fast - lean forward
+                verticalTilt = 10;
+            }
+            
+            this.playerSprite.setRotation((tiltAngle + verticalTilt) * (Math.PI / 180));
+            
+            // Scale effects for speed (20% bigger)
+            const baseScaleX = 78 / this.playerSprite.width;  // Scale to 78px width
+            const baseScaleY = 62 / this.playerSprite.height; // Scale to 62px height
+            
+            if (speedRatio > 0.8) {
+                // Slight horizontal stretch at high speed
+                this.playerSprite.setScale(baseScaleX * 1.1, baseScaleY * 0.95);
+            } else {
+                this.playerSprite.setScale(baseScaleX, baseScaleY);
+            }
+            
             // Apply sprite direction (flip horizontally)
             this.playerSprite.setFlipX(this.facingDirection === -1);
-            // Apply vertical flip when falling for more than 2 seconds
+            // Apply vertical flip when falling for extended time
             this.playerSprite.setFlipY(this.isFalling);
+            
+            // Speed trail effect
+            if (speedRatio > 0.7) {
+                this.particleManager.emitSpeedTrail(this.player.x, this.player.y, speedRatio);
+            }
         }
         
         // Track falling duration for sprite flipping
@@ -317,22 +410,21 @@ class GameScene extends Phaser.Scene {
             this.isFalling = false;
         }
         
-        // Momentum-based player movement
+        // Enhanced momentum-based player movement with speed boost
         let currentVelX = this.player.body.velocity.x;
+        let targetMaxSpeed = this.speedBoostActive ? this.superMaxSpeed : this.maxSpeed;
         
         if (this.cursors.left.isDown || this.wasd.A.isDown) {
             // Accelerate left
-            let newVelX = currentVelX - this.acceleration * (1/60); // Assuming 60 FPS
-            newVelX = Math.max(newVelX, -this.maxSpeed); // Clamp to max speed
+            let newVelX = currentVelX - this.acceleration * (1/60);
+            newVelX = Math.max(newVelX, -targetMaxSpeed);
             this.player.setVelocityX(newVelX);
-            // Update sprite direction
             this.facingDirection = -1;
         } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
             // Accelerate right
             let newVelX = currentVelX + this.acceleration * (1/60);
-            newVelX = Math.min(newVelX, this.maxSpeed); // Clamp to max speed
+            newVelX = Math.min(newVelX, targetMaxSpeed);
             this.player.setVelocityX(newVelX);
-            // Update sprite direction
             this.facingDirection = 1;
         } else {
             // Decelerate when no input
@@ -348,16 +440,31 @@ class GameScene extends Phaser.Scene {
             }
         }
 
-        // Variable height jumping - regular jump from ground
+        // Enhanced jumping with momentum and combo system
         if (this.player.body.touching.down) {
+            // Check if we landed on a platform (not ground) for combo system
+            if (this.player.y < 4950) { // Not on ground
+                this.handlePlatformLanding();
+            } else {
+                // Reset combo when touching ground
+                this.resetCombo();
+            }
+            
             if ((this.cursors.up.isDown || this.wasd.W.isDown)) {
                 if (!this.isJumping) {
-                    // Start jump
-                    this.player.setVelocityY(this.minJumpVelocity);
+                    // Momentum-based jumping - speed affects jump height
+                    const speedRatio = Math.abs(this.player.body.velocity.x) / this.maxSpeed;
+                    const momentumBonus = speedRatio * 200; // Up to 200 extra jump velocity
+                    const comboBonus = Math.min(this.combo * 10, 100); // Up to 100 extra from combo
+                    
+                    const totalJumpVelocity = this.minJumpVelocity - momentumBonus - comboBonus;
+                    this.player.setVelocityY(totalJumpVelocity);
+                    
                     this.isJumping = true;
                     this.jumpHoldTime = 0;
-                    // Emit jump dust particles
-                    this.particleManager.emitJumpDust(this.player.x, this.player.y);
+                    
+                    // Enhanced particles based on jump power
+                    this.particleManager.emitJumpDust(this.player.x, this.player.y, 1 + speedRatio);
                 }
             } else {
                 // Reset when not holding jump
@@ -379,22 +486,38 @@ class GameScene extends Phaser.Scene {
             this.isJumping = false;
         }
         
-        // Wall jumping - jump off walls
-        if ((this.cursors.up.isDown || this.wasd.W.isDown) && !this.player.body.touching.down) {
-            // Check if touching left wall
-            if (this.player.body.touching.left) {
-                this.player.setVelocityY(this.wallJumpVelocity);
-                this.player.setVelocityX(this.wallJumpForce); // Push away from wall
+        // Enhanced wall mechanics with sliding
+        if (!this.player.body.touching.down && (this.player.body.touching.left || this.player.body.touching.right)) {
+            // Wall sliding
+            if (this.player.body.velocity.y > 0) { // Falling
+                this.isWallSliding = true;
+                this.wallSlideTimer = this.time.now;
+                
+                // Slow down fall speed when wall sliding
+                if (this.player.body.velocity.y > this.wallSlideSpeed) {
+                    this.player.setVelocityY(this.wallSlideSpeed);
+                }
+                
                 // Emit wall slide particles
-                this.particleManager.emitWallSlide(this.player.x - 15, this.player.y);
+                const wallX = this.player.body.touching.left ? this.player.x - 15 : this.player.x + 15;
+                this.particleManager.emitWallSlide(wallX, this.player.y);
             }
-            // Check if touching right wall
-            else if (this.player.body.touching.right) {
-                this.player.setVelocityY(this.wallJumpVelocity);
-                this.player.setVelocityX(-this.wallJumpForce); // Push away from wall
-                // Emit wall slide particles
-                this.particleManager.emitWallSlide(this.player.x + 15, this.player.y);
+            
+            // Wall jumping with combo reset
+            if ((this.cursors.up.isDown || this.wasd.W.isDown)) {
+                // Reset combo on wall jump (like in Icy Tower)
+                this.resetCombo();
+                
+                if (this.player.body.touching.left) {
+                    this.player.setVelocityY(this.wallJumpVelocity);
+                    this.player.setVelocityX(this.wallJumpForce);
+                } else if (this.player.body.touching.right) {
+                    this.player.setVelocityY(this.wallJumpVelocity);
+                    this.player.setVelocityX(-this.wallJumpForce);
+                }
             }
+        } else {
+            this.isWallSliding = false;
         }
 
         // Check if we need to generate more platforms (throttled)
@@ -408,15 +531,25 @@ class GameScene extends Phaser.Scene {
         const isInAir = !this.player.body.touching.down;
         this.particleManager.updateAirTrail(this.player.x, this.player.y, isInAir, this.facingDirection, this.time.now);
 
-        // Update score based on height (no cap - let it go to full height)
-        // Ground is at y=5000, max height should be at y=-45000
+        // Update score with combo multiplier
         let calculatedHeight = Math.floor((5000 - this.player.y) / 10);
-        let height = Math.max(0, calculatedHeight); // Remove the 5000 cap!
+        let height = Math.max(0, calculatedHeight);
         
         if (height > this.score) {
-            this.score = height;
+            const heightGain = height - this.score;
+            const bonusScore = Math.floor(heightGain * this.comboMultiplier);
+            this.score = height + bonusScore;
             this.scoreText.setText('Height: ' + this.score);
         }
+        
+        // Update UI displays
+        this.updateUI();
+        
+        // Update danger zone
+        this.updateDangerZone();
+        
+        // Update combo timer
+        this.updateComboSystem();
         
         // Update background based on current height
         this.backgroundRenderer.updateBackground(height);
@@ -426,18 +559,201 @@ class GameScene extends Phaser.Scene {
         
 
 
-        // Game over if player falls too far
-        if (this.player.y > 5100) {
+        // Game over if player falls too far or hits danger zone
+        if (this.player.y > 5100 || this.player.y > this.dangerZoneY) {
             this.gameOver();
         }
+    }
+
+    // Handle platform landing for combo system
+    handlePlatformLanding() {
+        // Find which platform we landed on
+        let landedPlatform = null;
+        this.platforms.children.entries.forEach(platform => {
+            if (Math.abs(platform.y - this.player.y) < 50 && Math.abs(platform.x - this.player.x) < platform.body.width/2 + 20) {
+                landedPlatform = platform;
+            }
+        });
+        
+        if (landedPlatform && landedPlatform !== this.lastPlatformTouched) {
+            this.combo++;
+            this.maxCombo = Math.max(this.maxCombo, this.combo);
+            this.comboMultiplier = 1 + (this.combo * 0.1); // 10% bonus per combo
+            this.lastPlatformTouched = landedPlatform;
+            this.comboResetTimer = this.time.now;
+            
+            // Show combo popup for high combos
+            if (this.combo > 5 && this.combo % 5 === 0) {
+                this.showComboPopup();
+            }
+            
+            // Speed boost for high combos
+            if (this.combo > 10) {
+                this.speedBoostActive = true;
+                this.speedBoostTimer = this.time.now;
+            }
+            
+            // Emit combo particles
+            this.particleManager.emitComboEffect(this.player.x, this.player.y, this.combo);
+        }
+    }
+    
+    // Reset combo system
+    resetCombo() {
+        if (this.combo > 0) {
+            this.combo = 0;
+            this.comboMultiplier = 1;
+            this.lastPlatformTouched = null;
+            this.speedBoostActive = false;
+        }
+    }
+    
+    // Show combo celebration popup
+    showComboPopup() {
+        this.comboPopupText.setText(`${this.combo}x COMBO!`);
+        this.comboPopupText.setVisible(true);
+        this.comboPopupText.setAlpha(1);
+        this.comboPopupText.setScale(1.5);
+        
+        // Animate popup
+        this.tweens.add({
+            targets: this.comboPopupText,
+            alpha: 0,
+            scaleX: 0.5,
+            scaleY: 0.5,
+            duration: 1500,
+            ease: 'Power2',
+            onComplete: () => {
+                this.comboPopupText.setVisible(false);
+            }
+        });
+    }
+    
+
+    
+    // Update combo system timer
+    updateComboSystem() {
+        // Reset combo if too much time has passed without landing
+        if (this.combo > 0 && this.time.now - this.comboResetTimer > this.comboResetDelay) {
+            if (!this.player.body.touching.down) {
+                // Only reset if player is in air for too long
+                this.resetCombo();
+            }
+        }
+        
+        // Handle speed boost timer
+        if (this.speedBoostActive && this.time.now - this.speedBoostTimer > 3000) {
+            this.speedBoostActive = false;
+        }
+    }
+    
+    // Update danger zone
+    updateDangerZone() {
+        // Start danger zone after player reaches height 100
+        if (this.score > 100 && !this.dangerZoneActive) {
+            this.dangerZoneActive = true;
+        }
+        
+        if (this.dangerZoneActive) {
+            this.dangerZoneY -= this.dangerZoneSpeed;
+            
+            // Draw danger zone visual
+            this.dangerZoneGraphics.clear();
+            this.dangerZoneGraphics.fillGradientStyle(0xff4444, 0xff4444, 0xff0000, 0xff0000, 1);
+            this.dangerZoneGraphics.fillRect(0, this.dangerZoneY, 800, 200);
+            
+            // Add danger zone warning particles
+            if (this.time.now % 200 < 50) { // Flash effect
+                this.particleManager.emitDangerZoneWarning(400, this.dangerZoneY);
+            }
+        }
+    }
+    
+    // Update UI displays
+    updateUI() {
+        // Update combo display
+        if (this.combo > 1) {
+            this.comboText.setText(`Combo: ${this.combo}x (${this.comboMultiplier.toFixed(1)}x score)`);
+            this.comboText.setVisible(true);
+        } else {
+            this.comboText.setVisible(false);
+        }
+        
+        // Update speed display
+        this.currentSpeed = Math.abs(this.player.body.velocity.x);
+        const speedPercent = Math.floor((this.currentSpeed / this.maxSpeed) * 100);
+        
+        if (speedPercent > 30) {
+            let speedText = `Speed: ${speedPercent}%`;
+            if (this.speedBoostActive) speedText += ' BOOST!';
+            this.speedText.setText(speedText);
+            this.speedText.setVisible(true);
+        } else {
+            this.speedText.setVisible(false);
+        }
+    }
+
+    // Cleanup resources before restart
+    cleanupBeforeRestart() {
+        // Stop all tweens
+        this.tweens.killAll();
+        
+        // Clean up particle manager
+        if (this.particleManager) {
+            this.particleManager.destroy();
+        }
+        
+        // Clean up platform renderer
+        if (this.platformRenderer) {
+            this.platformRenderer.destroyAllSprites();
+        }
+        
+        // Clean up background renderer
+        if (this.backgroundRenderer) {
+            this.backgroundRenderer.destroy();
+        }
+        
+        // Clean up wall renderer
+        if (this.wallRenderer) {
+            this.wallRenderer.destroy();
+        }
+        
+        // Clear platform data
+        this.platformData = [];
+        
+        // Clear graphics
+        if (this.platformGraphics) {
+            this.platformGraphics.clear();
+        }
+        if (this.dangerZoneGraphics) {
+            this.dangerZoneGraphics.clear();
+        }
+        
+        // Reset procedural textures to avoid conflicts
+        if (this.textures.exists('proceduralStone')) {
+            this.textures.remove('proceduralStone');
+        }
+        if (this.textures.exists('proceduralDarkStone')) {
+            this.textures.remove('proceduralDarkStone');
+        }
+        
+        // Clean up particle textures
+        const particleTextures = ['dustParticle', 'impactParticle', 'sparkParticle', 'trailParticle', 
+                                 'comboParticle', 'speedParticle', 'dangerParticle'];
+        particleTextures.forEach(texture => {
+            if (this.textures.exists(texture)) {
+                this.textures.remove(texture);
+            }
+        });
     }
 
     gameOver() {
         this.physics.pause();
         this.player.setTint(0xff0000);
         
-        // Display game over text
-        let gameOverText = this.add.text(400, 300, 'Game Over!\nHeight: ' + this.score + '\nPress R to restart', {
+        // Display enhanced game over text with max combo
+        let gameOverText = this.add.text(400, 300, 
+            `Game Over!\nHeight: ${this.score}\nMax Combo: ${this.maxCombo}x\nPress R to restart`, {
             fontSize: '32px',
             fill: '#ffffff',
             align: 'center'
@@ -447,6 +763,8 @@ class GameScene extends Phaser.Scene {
 
         // Restart on R key
         this.input.keyboard.once('keydown-R', () => {
+            // Proper cleanup before restart
+            this.cleanupBeforeRestart();
             this.scene.restart();
         });
     }
