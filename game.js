@@ -98,6 +98,9 @@ class GameScene extends Phaser.Scene {
         this.maxJumpHoldTime = 0.3; // Max time to hold for full jump (300ms)
         this.isJumping = false;
         
+        // Sprite direction tracking
+        this.facingDirection = 1; // 1 = right, -1 = left
+        
         // Platform generation variables
         this.highestPlatformY = 4900; // Track highest platform created
         this.platformSpacing = 120; // Spacing between platforms
@@ -280,6 +283,8 @@ class GameScene extends Phaser.Scene {
             // Sprite version - sync sprite position with physics body
             this.playerSprite.x = this.player.x;
             this.playerSprite.y = this.player.y + 25; // Move sprite down a bit more to eliminate gap
+            // Apply sprite direction (flip horizontally)
+            this.playerSprite.setFlipX(this.facingDirection === -1);
         }
         
         // Momentum-based player movement
@@ -290,11 +295,15 @@ class GameScene extends Phaser.Scene {
             let newVelX = currentVelX - this.acceleration * (1/60); // Assuming 60 FPS
             newVelX = Math.max(newVelX, -this.maxSpeed); // Clamp to max speed
             this.player.setVelocityX(newVelX);
+            // Update sprite direction
+            this.facingDirection = -1;
         } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
             // Accelerate right
             let newVelX = currentVelX + this.acceleration * (1/60);
             newVelX = Math.min(newVelX, this.maxSpeed); // Clamp to max speed
             this.player.setVelocityX(newVelX);
+            // Update sprite direction
+            this.facingDirection = 1;
         } else {
             // Decelerate when no input
             if (Math.abs(currentVelX) > 0) {
