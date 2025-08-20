@@ -10,7 +10,12 @@ class GameScene extends Phaser.Scene {
         this.platformRenderer = new PlatformRenderer(this);
         this.platformRenderer.preloadPlatformImages();
         
-        // We'll create graphics programmatically in the create() method instead
+        // Load player sprite (fallback to graphics if not found)
+        try {
+            this.load.image('player', 'player.png');
+        } catch (error) {
+            console.log('Player sprite not found, will use graphics fallback');
+        }
     }
 
     create() {
@@ -19,19 +24,39 @@ class GameScene extends Phaser.Scene {
         // Game world bounds - make it tall for tower climbing to height 5000
         this.physics.world.setBounds(0, -45000, 800, 50000); // y=-45000 to y=5000 (50000 total height)
 
-        // Create player visual using graphics
-        this.playerGraphics = this.add.graphics();
-        this.playerGraphics.fillStyle(0xff6b6b); // Red color
-        this.playerGraphics.fillRect(0, 0, 30, 40);
+        // Create player sprite or fallback to graphics
+        const hasPlayerSprite = this.textures.exists('player');
         
-        // Create player physics body
-        this.player = this.physics.add.sprite(400, 4800);
+        if (hasPlayerSprite) {
+            // Create invisible physics body
+            this.player = this.physics.add.sprite(400, 4800);
+            this.player.setVisible(false);
+            
+            // Create separate visual sprite that we can position independently
+            this.playerSprite = this.add.sprite(400, 4800, 'player');
+            this.playerSprite.setDisplaySize(76, 84); // 10% wider again (69*1.1, height stays 84)
+            this.playerSprite.setOrigin(0.5, 1); // Bottom-center origin
+            this.playerSprite.setDepth(1000); // Make sure sprite appears on top of everything
+            
+            // Destroy any existing graphics from previous sessions
+            if (this.playerGraphics) {
+                this.playerGraphics.destroy();
+            }
+            this.playerGraphics = null; // Ensure no graphics fallback
+        } else {
+            // Fallback to graphics
+            this.playerGraphics = this.add.graphics();
+            this.playerGraphics.fillStyle(0xff6b6b); // Red color
+            this.playerGraphics.fillRect(0, 0, 30, 40);
+            
+            // Create invisible physics body
+            this.player = this.physics.add.sprite(400, 4800);
+            this.player.setVisible(false);
+        }
+        
         this.player.body.setSize(30, 40);
         this.player.setBounce(0.2);
         this.player.setCollideWorldBounds(false); // Don't constrain to world bounds - let player climb higher!
-        
-        // Make the physics sprite invisible since we're using graphics
-        this.player.setVisible(false);
 
         // Create platforms group
         this.platforms = this.physics.add.staticGroup();
@@ -246,9 +271,16 @@ class GameScene extends Phaser.Scene {
     }
 
     update() {
-        // Sync player graphics with physics body
-        this.playerGraphics.x = this.player.x - 15; // Center the graphics
-        this.playerGraphics.y = this.player.y - 20;
+        // Sync player visuals with physics body
+        if (this.playerGraphics) {
+            // Graphics fallback
+            this.playerGraphics.x = this.player.x - 15; // Center the graphics
+            this.playerGraphics.y = this.player.y - 20;
+        } else if (this.playerSprite) {
+            // Sprite version - sync sprite position with physics body
+            this.playerSprite.x = this.player.x;
+            this.playerSprite.y = this.player.y + 25; // Move sprite down a bit more to eliminate gap
+        }
         
         // Momentum-based player movement
         let currentVelX = this.player.body.velocity.x;
